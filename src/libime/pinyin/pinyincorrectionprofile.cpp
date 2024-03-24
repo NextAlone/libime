@@ -6,6 +6,7 @@
 #include "pinyincorrectionprofile.h"
 #include "pinyindata.h"
 #include "pinyinencoder.h"
+#include <string>
 
 namespace libime {
 
@@ -33,11 +34,71 @@ mappingFromRows(const std::vector<std::string> &rows) {
     return result;
 }
 
+std::string row1("qwertyuiop");
+std::string row2("asdfghjkl");
+std::string row3("zxcvbnm");
+
+/*
+ * Helper function to create mapping based on keyboard columns.
+ * Function assume that the key can only be corrected to the key adjcent to it.
+ * For example, if the input is {"qwa"}, the output will be {'q': ['a'], 'w': ['a'], 'a': ['q', 'w']}.
+ * Char in row 1 can only be corrected to char in row 2, char in row 2 can only be corrected to char in
+ * row 1 and row 3, char in row 3 can only be corrected to char in row 2.
+ */
+std::unordered_map<char, std::vector<char>>
+mappingFromColumns(const std::vector<std::string> &columns) {
+    std::unordered_map<char, std::vector<char>> result;
+    for (const auto &column : columns) {
+        for (size_t i = 0; i < column.size(); i++) {
+            bool isRow1 = row1.find(column[i]) != std::string::npos;
+            bool isRow2 = row2.find(column[i]) != std::string::npos;
+            bool isRow3 = row3.find(column[i]) != std::string::npos;
+            std::vector<char> items;
+            if (isRow1) {
+                for (size_t j = 0; j < column.size(); j++) {
+                    if (row2.find(column[j]) != std::string::npos) {
+                        items.push_back(column[j]);
+                    }
+                }
+            } else if (isRow2) {
+                for (size_t j = 0; j < column.size(); j++) {
+                    if (row1.find(column[j]) != std::string::npos ||
+                        row3.find(column[j]) != std::string::npos) {
+                        items.push_back(column[j]);
+                    }
+                }
+            } else if (isRow3) {
+                for (size_t j = 0; j < column.size(); j++) {
+                    if (row2.find(column[j]) != std::string::npos) {
+                        items.push_back(column[j]);
+                    }
+                }
+            }
+            if (result.find(column[i]) != result.end()) {
+                result[column[i]].insert(result[column[i]].end(), items.begin(), items.end());
+            } else {
+                result[column[i]] = std::move(items);
+            }
+        }
+    }
+    return result;
+}
+
 std::unordered_map<char, std::vector<char>>
 getProfileMapping(BuiltinPinyinCorrectionProfile profile) {
     switch (profile) {
     case BuiltinPinyinCorrectionProfile::Qwerty:
-        return mappingFromRows({"qwertyuiop", "asdfghjkl", "zxcvbnm"});
+      auto rowCorrection = mappingFromRows({"qwertyuiop", "asdfghjkl", "zxcvbnm"});
+      auto columnCorrection = mappingFromColumns({"qwa", "wesz", "erdx", "rtfc", "tygv", "yuhb", "uijn", "iokm", "opl"});
+      for (const auto &item : columnCorrection) {
+          auto row = rowCorrection.find(item.first);
+          if (row != rowCorrection.end()) {
+              row->second.insert(row->second.end(), item.second.begin(), item.second.end());
+          } else {
+              rowCorrection[item.first] = item.second;
+          }
+      }
+      return rowCorrection;
     }
 
     return {};
